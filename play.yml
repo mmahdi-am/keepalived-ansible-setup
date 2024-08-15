@@ -1,0 +1,104 @@
+- name: install and configure keepalived on master and backup
+  hosts: all
+  become: yes
+  remote_user: ansible
+  tasks:
+    - name: Update APT package repository
+      apt:
+        update_cache: true
+
+    - name: Install Keepalived package
+      apt:
+        name: keepalived
+        state: present
+
+
+- name: configure keepalived on master
+  hosts: master
+  become: yes
+  remote_user: ansible
+  vars:
+    MASTER_IP: 172.16.0.1
+    BACKUP_IP: 172.16.0.2
+    VIP: 192.168.1.70/24
+    interface: enp0s8
+  tasks:
+    - name: create keepalived configuration file on master
+      notify: Restart Keepalived
+      copy:
+        content: |
+          vrrp_instance VI_1 {
+            state MASTER
+            interface {{ interface }}
+            virtual_router_id 55
+            priority 200
+            advert_int 1
+            unicast_src_ip {{ MASTER_IP }}
+            unicast_peer {
+              {{ BACKUP_IP }}
+            }
+
+            authentication {
+              auth_type PASS
+              auth_pass Am@eg65g78!#t
+            }
+
+            virtual_ipaddress {
+              {{ VIP }}
+            }
+          }
+        owner: root
+        group: root
+        mode: '0644'
+        dest: /etc/keepalived/keepalived.conf
+
+
+
+
+- name: configure keepalived on backup
+  hosts: backup
+  become: yes
+  remote_user: ansible
+  vars:
+    MASTER_IP: 172.16.0.1
+    BACKUP_IP: 172.16.0.2
+    VIP: 192.168.1.70/24
+    interface: enp0s8
+  tasks:
+    - name: create keepalived configuration file on backup
+      notify: Restart Keepalived
+      copy:
+        content: |
+          vrrp_instance VI_1 {
+            state BACKUP
+            interface {{ interface }}
+            virtual_router_id 55
+            priority 100
+            advert_int 1
+            unicast_src_ip {{ BACKUP_IP }}
+            unicast_peer {
+              {{ MASTER_IP }}
+            }
+
+            authentication {
+              auth_type PASS
+              auth_pass Am@eg65g78!#t
+            }
+
+            virtual_ipaddress {
+              {{ VIP }}
+            }
+          }
+        owner: root
+        group: root
+        mode: '0644'
+        dest: /etc/keepalived/keepalived.conf
+
+
+
+
+  handlers:
+    - name: Restart Keepalived
+      service:
+        name: keepalived
+        state: restarted
